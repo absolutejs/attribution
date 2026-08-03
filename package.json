@@ -1,0 +1,47 @@
+{
+  "name": "@absolutejs/attribution",
+  "version": "0.1.0",
+  "description": "Privacy-aware click attribution, resilient browser measurement, and durable server conversion delivery for AbsoluteJS applications.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/absolutejs/attribution.git"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./google-ads": {
+      "types": "./dist/googleAds.d.ts",
+      "import": "./dist/googleAds.js",
+      "default": "./dist/googleAds.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "rm -rf dist && bun build src/index.ts src/googleAds.ts --outdir dist --root src --sourcemap --target=browser && tsc --project tsconfig.build.json",
+    "format": "prettier --write \"./**/*.{ts,json,md}\"",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "check:package": "bun run format && bun run typecheck && bun run test && bun run build",
+    "release": "bun run check:package && npm publish --access public"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.14",
+    "prettier": "3.9.6",
+    "typescript": "5.9.3"
+  }
+}
