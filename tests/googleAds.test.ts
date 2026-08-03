@@ -40,7 +40,16 @@ const fakeScript = (): FakeScript => {
   return script;
 };
 
-const browser = (online = true) => {
+type FakeDocument = EventTarget & {
+  createElement: () => FakeScript;
+  head: { appendChild: (script: FakeScript) => void };
+  visibilityState: DocumentVisibilityState;
+};
+
+const browser = (
+  online = true,
+  visibilityState: DocumentVisibilityState = "visible",
+) => {
   const scripts: FakeScript[] = [];
   const browserWindow = new EventTarget() as EventTarget & {
     dataLayer?: IArguments[];
@@ -48,23 +57,25 @@ const browser = (online = true) => {
     navigator: { onLine: boolean };
   };
   browserWindow.navigator = { onLine: online };
-  const browserDocument = {
-    createElement: () => {
-      const script = fakeScript();
-      script.remove = () => {
-        const index = scripts.indexOf(script);
-        if (index >= 0) scripts.splice(index, 1);
-      };
+  const browserDocument = new EventTarget() as FakeDocument;
+  browserDocument.visibilityState = visibilityState;
+  browserDocument.createElement = () => {
+    const script = fakeScript();
+    script.remove = () => {
+      const index = scripts.indexOf(script);
+      if (index >= 0) scripts.splice(index, 1);
+    };
 
-      return script;
-    },
-    head: {
-      appendChild: (script: FakeScript) => scripts.push(script),
-    },
+    return script;
+  };
+  browserDocument.head = {
+    appendChild: (script: FakeScript) => scripts.push(script),
   };
 
   return {
     document: browserDocument as unknown as Document,
+    rawDocument: browserDocument,
+    rawWindow: browserWindow,
     scripts,
     window: browserWindow as unknown as Window,
   };
@@ -120,6 +131,12 @@ describe("resilient Google tag", () => {
       hadGoogleClickId: true,
       recovered: true,
     });
+    expect(events[1]).toMatchObject({
+      attempt: 1,
+      event: "retry-scheduled",
+      failureReason: "network-or-client-blocked",
+      resourceTiming: { entryFound: false },
+    });
     expect(JSON.stringify(events)).not.toContain("private-click-id");
   });
 
@@ -134,6 +151,118 @@ describe("resilient Google tag", () => {
     controller.start();
     expect(controller.state()).toBe("waiting-online");
     expect(environment.scripts).toHaveLength(0);
+
+    environment.rawWindow.navigator.onLine = true;
+    environment.rawWindow.dispatchEvent(new Event("online"));
+    expect(controller.state()).toBe("loading");
+    expect(environment.scripts).toHaveLength(1);
+  });
+
+  test("waits until a hidden page is visible", () => {
+    const environment = browser(true, "hidden");
+    const events: GoogleTagTelemetry[] = [];
+    const controller = createGoogleAdsTag({
+      consent,
+      id: "AW-test",
+      onTelemetry: (event) => events.push(event),
+      window: environment.window,
+      document: environment.document,
+    });
+    controller.start();
+
+    expect(controller.state()).toBe("waiting-visible");
+    expect(environment.scripts).toHaveLength(0);
+    environment.rawDocument.visibilityState = "visible";
+    environment.rawDocument.dispatchEvent(new Event("visibilitychange"));
+    expect(controller.state()).toBe("loading");
+    expect(events.map((event) => event.event)).toEqual([
+      "waiting-visible",
+      "load-attempt",
+    ]);
+  });
+
+  test("classifies terminal CSP failures and includes diagnostic context", async () => {
+    const environment = browser();
+    const events: GoogleTagTelemetry[] = [];
+    const controller = createGoogleAdsTag({
+      consent,
+      id: "AW-test",
+      maxAttempts: 3,
+      onTelemetry: (event) => events.push(event),
+      window: environment.window,
+      document: environment.document,
+    });
+    controller.start();
+    const violation = Object.assign(new Event("securitypolicyviolation"), {
+      blockedURI: "https://www.googletagmanager.com/gtag/js?id=AW-test",
+      effectiveDirective: "script-src-elem",
+    });
+    environment.rawDocument.dispatchEvent(violation);
+    environment.scripts[0]!.dispatchEvent(new Event("error"));
+
+    expect(events.at(-1)).toMatchObject({
+      attempt: 1,
+      consent,
+      event: "failed",
+      failureReason: "csp-blocked",
+      hadExistingTag: false,
+      online: true,
+      visibilityState: "visible",
+    });
+    expect(events.at(-1)?.resourceTiming).toEqual({
+      durationMs: 0,
+      entryFound: false,
+      responseStatus: 0,
+      transferSize: 0,
+    });
+  });
+
+  test("times out a stalled script instead of remaining loading forever", async () => {
+    const environment = browser();
+    const events: GoogleTagTelemetry[] = [];
+    const controller = createGoogleAdsTag({
+      consent,
+      id: "AW-test",
+      loadTimeoutMs: 1,
+      maxAttempts: 1,
+      onTelemetry: (event) => events.push(event),
+      window: environment.window,
+      document: environment.document,
+    });
+    controller.start();
+    const stalledScript = environment.scripts[0]!;
+    await Bun.sleep(5);
+
+    expect(controller.state()).toBe("failed");
+    expect(events.at(-1)).toMatchObject({
+      event: "failed",
+      failureReason: "load-timeout",
+    });
+    stalledScript.dispatchEvent(new Event("load"));
+    expect(controller.state()).toBe("failed");
+    expect(events.filter((event) => event.event === "failed")).toHaveLength(1);
+  });
+
+  test("does not spend a retry when the browser goes offline during loading", () => {
+    const environment = browser();
+    const events: GoogleTagTelemetry[] = [];
+    const controller = createGoogleAdsTag({
+      consent,
+      id: "AW-test",
+      maxAttempts: 1,
+      onTelemetry: (event) => events.push(event),
+      window: environment.window,
+      document: environment.document,
+    });
+    controller.start();
+    environment.rawWindow.navigator.onLine = false;
+    environment.scripts[0]!.dispatchEvent(new Event("error"));
+    expect(controller.state()).toBe("waiting-online");
+
+    environment.rawWindow.navigator.onLine = true;
+    environment.rawWindow.dispatchEvent(new Event("online"));
+    expect(controller.state()).toBe("loading");
+    expect(events.at(-1)).toMatchObject({ attempt: 1, event: "load-attempt" });
   });
 });
 

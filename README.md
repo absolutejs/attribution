@@ -7,7 +7,8 @@ Privacy-aware attribution primitives for web applications:
 - load the Google tag through a retrying `idle → loading → ready/failed` state
   machine;
 - keep consent and conversion commands queued while the tag recovers;
-- emit identifier-free load telemetry; and
+- emit identifier-free, classified load telemetry with lifecycle, consent, CSP,
+  and resource-timing context; and
 - supplement browser tag conversions through Google Data Manager using the same
   transaction ID for deduplication.
 
@@ -39,6 +40,12 @@ const qualificationUrl = attribution.decorate("https://qualify.example.com", [
   "https://qualify.example.com",
 ]);
 ```
+
+The loader waits for the page to be online and visible, applies a bounded
+per-attempt timeout, and spaces retries over a longer window. Terminal telemetry
+classifies CSP blocks, offline transitions, timeouts, and the browser's otherwise
+opaque network-or-client-blocked failures. Cross-origin response details remain
+restricted unless the resource opts into Resource Timing access.
 
 ## Durable Google conversion supplement
 

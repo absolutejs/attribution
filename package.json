@@ -1,6 +1,6 @@
 {
   "name": "@absolutejs/attribution",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Privacy-aware click attribution, resilient browser measurement, and durable server conversion delivery for AbsoluteJS applications.",
   "repository": {
     "type": "git",
