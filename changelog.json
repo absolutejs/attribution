@@ -1,5 +1,16 @@
 {
-	"contract": 1,
-	"name": "@absolutejs/attribution",
-	"releases": []
+  "contract": 1,
+  "name": "@absolutejs/attribution",
+  "releases": [
+    {
+      "changes": [
+        {
+          "kind": "added",
+          "summary": "Add consent-gated Reddit Pixel support through @absolutejs/attribution/reddit, with typed conversions, bounded loading, and conversion-ID deduplication."
+        }
+      ],
+      "date": "2026-09-20",
+      "version": "0.3.0"
+    }
+  ]
 }

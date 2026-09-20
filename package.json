@@ -1,6 +1,6 @@
 {
   "name": "@absolutejs/attribution",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Privacy-aware click attribution, resilient browser measurement, and durable server conversion delivery for AbsoluteJS applications.",
   "repository": {
     "type": "git",
@@ -20,6 +20,11 @@
       "types": "./dist/googleAds.d.ts",
       "import": "./dist/googleAds.js",
       "default": "./dist/googleAds.js"
+    },
+    "./reddit": {
+      "types": "./dist/reddit.d.ts",
+      "import": "./dist/reddit.js",
+      "default": "./dist/reddit.js"
     }
   },
   "files": [
@@ -34,7 +39,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/googleAds.ts --outdir dist --root src --sourcemap --target=browser && tsc --project tsconfig.build.json",
+    "build": "rm -rf dist && bun build src/index.ts src/googleAds.ts src/reddit.ts --outdir dist --root src --sourcemap --target=browser && tsc --project tsconfig.build.json",
     "format": "prettier --write \"./**/*.{ts,json,md}\"",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
