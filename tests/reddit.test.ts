@@ -155,6 +155,58 @@ describe("Reddit Pixel", () => {
     expect(pixel.state()).toBe("failed");
   });
 
+  test("a slow successful load delivers queued conversions after the caller wait expires", async () => {
+    const env = browser();
+    const pixel = createRedditPixel({
+      ...env,
+      id: "a2_test",
+      consent: true,
+      loadTimeoutMs: 1000,
+      conversionWaitTimeoutMs: 5,
+    });
+    expect(
+      await pixel.track("Purchase", {
+        value: 12.5,
+        currency: "USD",
+        conversionId: "slow-purchase",
+      }),
+    ).toBe(false);
+    expect(pixel.state()).toBe("loading");
+    env.ready();
+    expect(pixel.state()).toBe("ready");
+    expect(env.calls).toEqual([
+      ["init", "a2_test", { useDecimalCurrencyValues: true }],
+      ["track", "PageVisit", {}],
+      [
+        "track",
+        "Purchase",
+        { value: 12.5, currency: "USD", conversionId: "slow-purchase" },
+      ],
+    ]);
+    expect(
+      await pixel.track("Purchase", { conversionId: "slow-purchase" }),
+    ).toBe(false);
+    pixel.close();
+  });
+
+  test("consent withdrawal drops an event retained after the caller wait", async () => {
+    const env = browser();
+    const pixel = createRedditPixel({
+      ...env,
+      id: "a2_test",
+      consent: true,
+      loadTimeoutMs: 1000,
+      conversionWaitTimeoutMs: 5,
+    });
+    expect(await pixel.track("SignUp")).toBe(false);
+    pixel.updateConsent(false);
+    env.ready();
+    expect(env.calls).toHaveLength(0);
+    pixel.updateConsent(true);
+    expect(env.calls.filter((call) => call[1] === "SignUp")).toHaveLength(0);
+    pixel.close();
+  });
+
   test("close settles pending events and ignores late load", async () => {
     const env = browser();
     const pixel = createRedditPixel({ ...env, id: "a2_test", consent: true });

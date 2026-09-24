@@ -122,3 +122,13 @@ await sendGoogleAdsDataManagerConversion(
 The package never sends full landing URLs or click identifiers through its
 telemetry callback. Server delivery requires an explicit access-token provider,
 destination, consent state, and click identifier.
+
+## Reddit loading and conversion waits
+
+The Reddit adapter allows up to 15 seconds for the SDK to load. A `track()`
+caller waits at most two seconds by default, so signup and checkout can proceed.
+After that short wait, consented events remain queued until the SDK loads or
+the script deadline expires. Consent withdrawal, explicit load failure, and
+`close()` discard the queue. Set `loadTimeoutMs` and `conversionWaitTimeoutMs`
+separately to customize these deadlines. A `false` result can mean the caller
+wait expired; a `true` result means SDK handoff, not confirmed network delivery.

@@ -5,6 +5,20 @@
     {
       "changes": [
         {
+          "kind": "fixed",
+          "summary": "Allow slow Reddit SDK loads to deliver consented conversions without extending checkout waits.",
+          "symbols": [
+            "RedditPixelOptions",
+            "RedditPixelController"
+          ]
+        }
+      ],
+      "date": "2026-09-24",
+      "version": "0.3.1"
+    },
+    {
+      "changes": [
+        {
           "kind": "added",
           "summary": "Add consent-gated Reddit Pixel support through @absolutejs/attribution/reddit, with typed conversions, bounded loading, and conversion-ID deduplication."
         }

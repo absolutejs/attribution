@@ -27,12 +27,16 @@ export type RedditPixelOptions = {
   consent: boolean;
   window?: Window;
   document?: Document;
+  /** Total script download deadline; independent of a caller waiting on track. */
   loadTimeoutMs?: number;
+  /** Maximum time track waits; queued events can still send after this expires. */
+  conversionWaitTimeoutMs?: number;
 };
 export type RedditPixelController = {
   start: () => void;
   state: () => RedditPixelState;
-  /** True means handed to the SDK, not confirmed delivery to Reddit. */
+  /** True means handed to the SDK, not confirmed delivery to Reddit.
+   * False can mean still queued after the caller wait expires. */
   track: (
     event: RedditEvent,
     metadata?: RedditEventMetadata,
@@ -79,9 +83,12 @@ export const createRedditPixel = (
   let pageVisited = false;
   let pending: PendingEvent[] = [];
   const sent = new Set<string>();
-  const timeoutMs = options.loadTimeoutMs ?? 2_000;
+  const timeoutMs = options.loadTimeoutMs ?? 15_000;
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0)
     throw new Error("Invalid Reddit pixel load timeout");
+  const conversionWaitMs = options.conversionWaitTimeoutMs ?? 2_000;
+  if (!Number.isFinite(conversionWaitMs) || conversionWaitMs <= 0)
+    throw new Error("Invalid Reddit conversion wait timeout");
 
   const discard = () => {
     for (const event of pending) event.resolve(false);
@@ -195,9 +202,19 @@ export const createRedditPixel = (
       if (state === "ready") return Promise.resolve(send(event, metadata));
       if (state !== "loading" || pending.length >= 100)
         return Promise.resolve(false);
-      return new Promise((resolve) =>
-        pending.push({ event, metadata: structuredClone(metadata), resolve }),
-      );
+      return new Promise((resolve) => {
+        // Do not make checkout wait for the full script deadline, and do not
+        // discard consented conversions merely because its short wait expired.
+        const wait = setTimeout(() => resolve(false), conversionWaitMs);
+        pending.push({
+          event,
+          metadata: structuredClone(metadata),
+          resolve: (sent) => {
+            clearTimeout(wait);
+            resolve(sent);
+          },
+        });
+      });
     },
     updateConsent: (granted) => {
       if (state === "closed") return;
